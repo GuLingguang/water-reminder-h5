@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<meta name="theme-color" content="#7c3aed" />
+<meta name="description" content="桶装水 AI —— 你的智能补水搭子：一杯一记录、按体重与杯容量算建议杯数、喝超了会变色提醒，还藏了一个彩蛋。" />
+<title>💧 桶装水 AI · 你的智能补水搭子</title>
+<style>
+:root{
+  --p1:#6366f1; --p2:#a855f7; --p3:#ec4899; --p4:#22d3ee;
+  --ink:#1e1b4b; --muted:#7c7a99;
+  --glass:rgba(255,255,255,.55);
+  --line:rgba(255,255,255,.8);
+  --shadow:0 8px 32px rgba(99,102,241,.16);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  margin:0;
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei","Helvetica Neue",sans-serif;
+  color:var(--ink);
+  background:linear-gradient(165deg,#eef2ff 0%,#faf5ff 30%,#fdf2f8 62%,#ecfeff 100%);
+  background-attachment:fixed;
+  min-height:100vh;overflow-x:hidden;position:relative;
+  padding:0 16px calc(120px + env(safe-area-inset-bottom));
+}
+/* ---------- 装饰：AI 味的灵魂 ---------- */
+.blob{position:fixed;border-radius:50%;filter:blur(64px);opacity:.55;z-index:0;pointer-events:none;animation:float 20s ease-in-out infinite}
+.b1{width:280px;height:280px;background:#a5b4fc;top:-90px;left:-80px}
+.b2{width:240px;height:240px;background:#f0abfc;top:34%;right:-100px;animation-delay:-6s}
+.b3{width:300px;height:300px;background:#a5f3fc;bottom:-120px;left:-60px;animation-delay:-12s}
+@keyframes float{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(24px,-28px) scale(1.08)}66%{transform:translate(-20px,20px) scale(.95)}}
+@media (prefers-reduced-motion:reduce){.blob{animation:none}}
+
+/* ---------- 宽屏背景：填满两侧 ----------
+   原来的三个 .blob 是按手机屏设计的（直径 240~300px），在 1440px 上只够占住两个角，
+   中间两侧大片留白。宽屏改用 vw 单位的光晕阵列铺满，并加一层上升气泡呼应主题。
+   全部用 radial-gradient 自带柔边，比 filter:blur(64px) 便宜很多。 */
+.wide-bg{display:none}
+@media (min-width:900px){
+  .blob{display:none}
+  .wide-bg{display:block;position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+  .wide-bg .g{position:absolute;border-radius:50%;animation:float 26s ease-in-out infinite}
+  .g1{width:54vw;height:54vw;left:-16vw;top:-18vw;background:radial-gradient(circle,rgba(165,180,252,.72),rgba(165,180,252,0) 68%)}
+  .g2{width:48vw;height:48vw;right:-14vw;top:4vh;background:radial-gradient(circle,rgba(240,171,252,.66),rgba(240,171,252,0) 68%);animation-delay:-6s}
+  .g3{width:60vw;height:60vw;left:-18vw;bottom:-22vw;background:radial-gradient(circle,rgba(165,243,252,.66),rgba(165,243,252,0) 68%);animation-delay:-12s}
+  .g4{width:44vw;height:44vw;right:-10vw;bottom:-14vw;background:radial-gradient(circle,rgba(199,210,254,.7),rgba(199,210,254,0) 68%);animation-delay:-3s}
+  .g5{width:38vw;height:38vw;left:30vw;top:-16vw;background:radial-gradient(circle,rgba(251,207,232,.6),rgba(251,207,232,0) 70%);animation-delay:-9s}
+  .g6{width:34vw;height:34vw;left:36vw;bottom:-12vw;background:radial-gradient(circle,rgba(186,230,253,.6),rgba(186,230,253,0) 70%);animation-delay:-15s}
+  .bubbles{position:absolute;inset:0}
+  .bubbles .bub{position:absolute;bottom:-8vh;border-radius:50%;
+    background:radial-gradient(circle at 34% 28%,rgba(255,255,255,.95),rgba(165,243,252,.42) 62%,rgba(165,243,252,.04) 74%);
+    border:1px solid rgba(255,255,255,.55);animation:bubrise linear infinite}
+}
+@keyframes bubrise{
+  from{transform:translateY(0) scale(.85);opacity:0}
+  12%{opacity:.9}
+  to{transform:translateY(-115vh) scale(1.08);opacity:0}
+}
+@media (prefers-reduced-motion:reduce){.bubbles .bub{display:none}}
+
+.wrap{position:relative;z-index:1;max-width:520px;margin:0 auto}
+
+/* emoji 不参与 background-clip:text，否则彩色 emoji 会被压成纯色剪影 */
+.emoji{background:none;background-clip:initial;-webkit-background-clip:initial;color:initial;-webkit-text-fill-color:initial}
+
+/* ---------- 顶部 ---------- */
+header{padding:28px 4px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.logo{
+  font-size:21px;font-weight:800;letter-spacing:-.4px;
+  background:linear-gradient(100deg,var(--p1),var(--p2) 45%,var(--p3));
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.badge{
+  font-size:11px;font-weight:700;padding:4px 10px;border-radius:999px;color:#fff;
+  background:linear-gradient(100deg,var(--p1),var(--p2));
+  box-shadow:0 4px 14px rgba(168,85,247,.4);
+  animation:pulse 2.4s ease-in-out infinite;
+}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.82;transform:scale(.97)}}
+.sub{width:100%;font-size:12px;color:var(--muted);margin-top:2px}
+
+/* ---------- 玻璃卡片 ---------- */
+.card{
+  background:var(--glass);
+  border:1px solid var(--line);
+  border-radius:26px;
+  box-shadow:var(--shadow);
+  backdrop-filter:blur(18px) saturate(160%);
+  -webkit-backdrop-filter:blur(18px) saturate(160%);
+  padding:22px;margin-bottom:16px;
+}
+.card h2{margin:0 0 14px;font-size:15px;display:flex;align-items:center;gap:8px;font-weight:800}
+.card h2 small{font-weight:500;font-size:11px;color:var(--muted);margin-left:auto}
+
+/* ---------- 进度环 ---------- */
+.ring-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;padding:6px 0 2px}
+.ring{
+  width:196px;height:196px;border-radius:50%;
+  display:grid;place-items:center;position:relative;
+  transition:background .6s cubic-bezier(.34,1.4,.64,1);
+  box-shadow:0 10px 40px rgba(139,92,246,.28);
+}
+.ring::after{
+  content:"";position:absolute;inset:14px;border-radius:50%;
+  background:linear-gradient(165deg,#ffffff,#f6f4ff);
+  box-shadow:inset 0 2px 10px rgba(99,102,241,.1);
+}
+.ring-inner{position:relative;z-index:2;text-align:center;line-height:1.15}
+.ring-pct{font-size:42px;font-weight:900;letter-spacing:-2px;
+  background:linear-gradient(100deg,var(--p1),var(--p2),var(--p3));
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.ring-pct span{font-size:19px}
+.ring-lbl{font-size:11.5px;color:var(--muted);margin-top:4px;font-weight:600}
+.ring-ml{font-size:13px;font-weight:800;margin-top:6px;color:#4f46e5}
+.ring-ml em{font-style:normal;color:var(--muted);font-weight:600}
+
+/* ---------- 主按钮 ---------- */
+.btn-main{
+  width:100%;border:0;cursor:pointer;color:#fff;font-size:17px;font-weight:800;
+  padding:18px;border-radius:22px;font-family:inherit;
+  background:linear-gradient(100deg,var(--p1),var(--p2) 50%,var(--p3));
+  background-size:200% 100%;
+  box-shadow:0 12px 32px rgba(139,92,246,.42);
+  transition:transform .14s,box-shadow .14s,background-position .5s;
+}
+.btn-main:hover{background-position:100% 0}
+.btn-main:active{transform:scale(.965);box-shadow:0 6px 18px rgba(139,92,246,.36)}
+.btn-main small{display:block;font-size:11px;font-weight:500;opacity:.85;margin-top:4px}
+
+.row{display:flex;gap:10px;margin-top:12px}
+.btn-ghost{
+  flex:1;border:1px solid rgba(139,92,246,.28);background:rgba(255,255,255,.72);
+  color:#6d28d9;font-weight:700;font-size:13px;padding:13px 6px;border-radius:16px;
+  cursor:pointer;font-family:inherit;transition:.15s;white-space:nowrap;
+}
+.btn-ghost:active{transform:scale(.97);background:#fff}
+.btn-ghost.warn{color:#be123c;border-color:rgba(244,63,94,.3)}
+
+/* ---------- AI 对话框 ---------- */
+.ai-card{
+  background:linear-gradient(150deg,rgba(255,255,255,.72),rgba(243,232,255,.6));
+  border:1px solid rgba(196,181,253,.65);
+}
+.ai-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.avatar{
+  width:38px;height:38px;border-radius:13px;display:grid;place-items:center;font-size:19px;
+  background:linear-gradient(140deg,var(--p1),var(--p2));
+  box-shadow:0 6px 18px rgba(139,92,246,.4);flex:none;
+}
+.ai-name{font-weight:800;font-size:13.5px}
+.ai-status{font-size:11px;color:#8b5cf6;display:flex;align-items:center;gap:5px;font-weight:600;min-width:0}
+.ai-status #aiStatus{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dot{width:6px;height:6px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 0 rgba(34,197,94,.6);animation:ping 1.8s infinite}
+@keyframes ping{0%{box-shadow:0 0 0 0 rgba(34,197,94,.55)}70%{box-shadow:0 0 0 8px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
+.bubble{
+  background:rgba(255,255,255,.9);border-radius:6px 18px 18px 18px;
+  /* 148px = 现有文案库最长一条（105 字）实测渲染高度 146px + 2px 余量。
+     锁死下限后气泡高度恒定：清空、打字机逐字增长都不会再推动下方元素。 */
+  padding:14px 16px;font-size:13.5px;line-height:1.72;min-height:148px;
+  border:1px solid rgba(221,214,254,.9);box-shadow:0 3px 14px rgba(139,92,246,.09);
+}
+.cursor{display:inline-block;width:7px;height:15px;background:#a855f7;vertical-align:-2px;border-radius:2px;animation:blink .9s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+
+/* ---------- 思考过程（诚实版） ---------- */
+/* 思考过程：绝对定位浮层，盖在气泡之上。
+   关键：它不参与文档流 —— 出现、流式输出、收起，全程不改变任何元素的位置。
+   （早先是 display:none↔block 的普通流内元素，每说一句话页面会抖两下） */
+.ai-body{position:relative}
+.thinkbox{display:none;position:absolute;inset:0;z-index:3;border:1px solid rgba(196,181,253,.75);
+  border-radius:14px;background:linear-gradient(150deg,rgba(247,245,255,.985),rgba(252,247,255,.97));overflow:hidden}
+.thinkbox.on{display:block;animation:eggpop .28s cubic-bezier(.34,1.4,.64,1)}
+.tb-head{display:flex;align-items:center;gap:7px;padding:10px 13px;font-size:12px;font-weight:800;color:#7c3aed}
+.tb-body{padding:0 13px 11px;font-size:12.5px;line-height:1.7;color:#6b7280}
+.tb-dots{display:inline-flex;gap:3px;margin-left:3px}
+.tb-dots i{width:4px;height:4px;border-radius:50%;background:#a855f7;animation:tbblink 1.2s infinite}
+.tb-dots i:nth-child(2){animation-delay:.18s}
+.tb-dots i:nth-child(3){animation-delay:.36s}
+@keyframes tbblink{0%,80%,100%{opacity:.25;transform:translateY(0)}40%{opacity:1;transform:translateY(-2px)}}
+
+/* ---------- 统计 ---------- */
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.stat{
+  background:rgba(255,255,255,.72);border:1px solid var(--line);border-radius:18px;
+  padding:14px 8px;text-align:center;
+}
+.stat b{display:block;font-size:19px;font-weight:900;letter-spacing:-.5px;
+  background:linear-gradient(100deg,var(--p1),var(--p3));
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.stat span{font-size:10.5px;color:var(--muted);font-weight:600;display:block;margin-top:3px}
+
+/* ---------- 时间线 ---------- */
+.tl{list-style:none;margin:0;padding:0;max-height:216px;overflow-y:auto}
+.tl li{
+  display:flex;align-items:center;gap:11px;padding:10px 2px;
+  border-bottom:1px dashed rgba(196,181,253,.45);font-size:13px;
+}
+.tl li:last-child{border-bottom:0}
+.tl .ico{width:28px;height:28px;border-radius:10px;display:grid;place-items:center;
+  background:linear-gradient(140deg,#e0e7ff,#fae8ff);font-size:14px;flex:none}
+.tl .t{font-weight:800;font-variant-numeric:tabular-nums}
+.tl .m{margin-left:auto;color:var(--muted);font-size:11.5px}
+.empty{text-align:center;color:var(--muted);font-size:12.5px;padding:26px 0;line-height:1.9}
+.tl li.empty{display:block;border-bottom:0}
+
+/* ---------- 设置 ---------- */
+.field{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px dashed rgba(196,181,253,.4)}
+.field:last-child{border-bottom:0}
+/* 只给左侧文字标签 flex，必须排除 .switch —— 否则开关那个 label 也会被 flex:1 拉满整行，
+   且 flex-basis:0% 会让 .switch 自己的 width:52px 失效（特异性 (0,1,1) > (0,1,0)） */
+.field>label:not(.switch){flex:1;font-size:13px;font-weight:700}
+.field .hint{font-size:11px;color:var(--muted);font-weight:500;display:block;margin-top:3px}
+.field output{font-weight:900;color:#7c3aed;font-size:14px;min-width:56px;text-align:right;font-variant-numeric:tabular-nums}
+input[type=range]{
+  -webkit-appearance:none;appearance:none;width:112px;height:6px;border-radius:99px;
+  background:linear-gradient(90deg,var(--p1),var(--p2));outline:0;flex:none;
+}
+/* 窄屏（≤359px）：标签最小内容宽 + 输出框 + 滑块 112px 会超出可用宽度，导致横向溢出 */
+@media (max-width:359px){ input[type=range]{width:84px} }
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:#fff;
+  border:3px solid var(--p2);box-shadow:0 3px 10px rgba(168,85,247,.45);cursor:pointer;
+}
+input[type=number]{
+  width:88px;padding:9px 12px;border-radius:13px;border:1px solid rgba(196,181,253,.8);
+  background:rgba(255,255,255,.85);font-family:inherit;font-size:13.5px;font-weight:700;
+  color:var(--ink);text-align:center;outline:0;
+}
+input[type=number]:focus{border-color:var(--p2);box-shadow:0 0 0 3px rgba(168,85,247,.14)}
+/* 独占一行的设置项（标签在上、控件铺满下一行），用于杯容量档位 */
+.field.stack{flex-wrap:wrap}
+.field.stack>label:not(.switch){flex:1 1 100%}
+.cups{display:flex;gap:6px;width:100%;margin-top:4px}
+.cups button{
+  flex:1;min-width:0;padding:9px 2px;border-radius:13px;cursor:pointer;font-family:inherit;
+  border:1px solid rgba(139,92,246,.28);background:rgba(255,255,255,.72);color:#6d28d9;
+  font-size:12.5px;font-weight:700;transition:.15s;
+}
+.cups button:active{transform:scale(.96)}
+.cups button.on{
+  background:linear-gradient(100deg,var(--p1),var(--p2));color:#fff;border-color:transparent;
+  box-shadow:0 4px 14px rgba(139,92,246,.35);
+}
+/* 行内小按钮 */
+.mini{
+  border:1px solid rgba(139,92,246,.3);background:rgba(255,255,255,.85);color:#6d28d9;
+  font-family:inherit;font-size:10.5px;font-weight:800;padding:2px 9px;border-radius:99px;
+  cursor:pointer;margin-left:4px;vertical-align:1px;
+}
+.mini:active{transform:scale(.96)}
+.switch{position:relative;width:52px;height:30px;flex:none}
+.switch input{opacity:0;width:0;height:0;position:absolute}
+.slider{
+  position:absolute;inset:0;border-radius:99px;cursor:pointer;transition:.28s;
+  background:#d8d4ee;
+}
+.slider::before{
+  content:"";position:absolute;width:24px;height:24px;left:3px;top:3px;border-radius:50%;
+  background:#fff;transition:.28s;box-shadow:0 2px 8px rgba(30,27,75,.24);
+}
+.switch input:checked+.slider{background:linear-gradient(100deg,var(--p1),var(--p2))}
+.switch input:checked+.slider::before{transform:translateX(22px)}
+
+/* ---------- Toast ---------- */
+#toast{position:fixed;left:50%;bottom:34px;transform:translate(-50%,calc(100% + 60px));z-index:60;
+  width:calc(100% - 48px);max-width:440px;transition:transform .42s cubic-bezier(.34,1.4,.64,1)}
+#toast.on{transform:translate(-50%,0)}
+.toast-in{
+  background:linear-gradient(110deg,var(--p1),var(--p2));color:#fff;border-radius:20px;
+  padding:15px 18px;font-size:13.5px;font-weight:700;line-height:1.6;
+  box-shadow:0 14px 40px rgba(99,102,241,.44);display:flex;gap:11px;align-items:flex-start;
+}
+.toast-in .em{font-size:21px;line-height:1}
+
+/* ---------- 弹层 ---------- */
+.mask{position:fixed;inset:0;background:rgba(30,27,75,.42);backdrop-filter:blur(6px);
+  z-index:80;display:none;align-items:flex-end;justify-content:center}
+.mask.on{display:flex;animation:fade .25s}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.sheet{
+  width:100%;max-width:520px;background:linear-gradient(170deg,#fff,#faf5ff);
+  border-radius:30px 30px 0 0;padding:26px 22px calc(30px + env(safe-area-inset-bottom));
+  max-height:86vh;overflow-y:auto;animation:up .38s cubic-bezier(.34,1.3,.64,1);
+}
+@keyframes up{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.sheet h3{margin:0 0 6px;font-size:18px;font-weight:900;letter-spacing:-.3px;
+  background:linear-gradient(100deg,var(--p1),var(--p3));
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.sheet .lead{font-size:12px;color:var(--muted);margin-bottom:16px}
+.think{display:flex;align-items:center;gap:9px;font-size:13px;color:#7c3aed;font-weight:700;padding:14px 0}
+.bar{height:7px;border-radius:99px;background:#ede9fe;overflow:hidden;margin-bottom:18px}
+.bar i{display:block;height:100%;width:0;border-radius:99px;
+  background:linear-gradient(90deg,var(--p1),var(--p2),var(--p3));transition:width .34s}
+.ins{display:flex;gap:11px;padding:13px 0;border-bottom:1px dashed rgba(196,181,253,.5);font-size:13px;line-height:1.75}
+.ins:last-of-type{border-bottom:0}
+.ins .k{font-size:17px;flex:none}
+.ins b{color:#6d28d9}
+.tag{display:inline-block;font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:99px;
+  background:linear-gradient(100deg,#ede9fe,#fae8ff);color:#7c3aed;margin-right:6px}
+
+footer{text-align:center;font-size:10.5px;color:#a5a3bd;line-height:2;padding:8px 0 4px}
+footer b{color:#8b5cf6}
+
+.confetti{position:fixed;inset:0;pointer-events:none;z-index:90;overflow:hidden}
+.confetti i{position:absolute;width:9px;height:14px;border-radius:2px;animation:fall linear forwards}
+@keyframes fall{to{transform:translateY(108vh) rotate(720deg);opacity:.15}}
+
+/* ---------- 彩蛋：一桶饮尽（喝满 18.9L 水漫金山） ---------- */
+.flood{position:fixed;inset:0;z-index:95;pointer-events:none;overflow:hidden}
+.flood .wave{position:absolute;left:-5%;width:110%;bottom:0;height:0;transition:height 2.6s cubic-bezier(.4,0,.2,1)}
+.flood.on .wave{height:100%}
+.flood .w1{background:linear-gradient(180deg,rgba(34,211,238,.58),rgba(99,102,241,.72));border-radius:50% 50% 0 0/56px 56px 0 0}
+.flood .w2{background:linear-gradient(180deg,rgba(165,243,252,.45),rgba(168,85,247,.52));border-radius:50% 50% 0 0/92px 92px 0 0;transition-duration:3.2s;transition-delay:.2s}
+.flood .egg-float{position:absolute;inset:0;z-index:2}
+.flood .egg-float span{position:absolute;bottom:-12vh;animation:rise linear forwards}
+@keyframes rise{from{transform:translateY(0) rotate(0);opacity:0}12%{opacity:1}to{transform:translateY(-118vh) rotate(320deg);opacity:.12}}
+.flood .egg-card{position:absolute;left:50%;top:32%;transform:translate(-50%,-50%);width:calc(100% - 48px);max-width:430px;z-index:3}
+.egg-in{background:rgba(255,255,255,.94);border-radius:24px;padding:20px;text-align:center;
+  box-shadow:0 20px 60px rgba(30,27,75,.34);animation:eggpop .5s cubic-bezier(.34,1.4,.64,1)}
+.egg-in b{display:block;font-size:20px;margin-bottom:8px;color:#4f46e5;font-weight:900;letter-spacing:-.3px}
+.egg-in span{font-size:13px;line-height:1.75;color:#37306b;display:block}
+@keyframes eggpop{from{transform:scale(.82);opacity:0}to{transform:scale(1);opacity:1}}
+</style>
+</head>
+<body>
+<div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
+
+<!-- 宽屏装饰层：只在 ≥900px 显示，手机端维持原有三个光晕不动 -->
+<div class="wide-bg" aria-hidden="true">
+  <span class="g g1"></span><span class="g g2"></span><span class="g g3"></span>
+  <span class="g g4"></span><span class="g g5"></span><span class="g g6"></span>
+  <div class="bubbles" id="bubbles"></div>
+</div>
+
+<div class="wrap">
+
+  <header>
+    <div class="logo"><span class="emoji">💧</span> 桶装水 AI</div>
+    <div class="badge">✨ 0 参数驱动</div>
+    <div class="sub" id="greet">正在唤醒你的专属补水智能体…</div>
+  </header>
+
+  <main>
+
+  <!-- 进度环 -->
+  <section class="card">
+    <div class="ring-wrap">
+      <div class="ring" id="ring">
+        <div class="ring-inner">
+          <div class="ring-pct" id="pct">0<span>%</span></div>
+          <div class="ring-lbl">今日补水完成度</div>
+          <div class="ring-ml" id="ml">0 <em>/ 2000 ml</em></div>
+        </div>
+      </div>
+      <button class="btn-main" id="drink">💧 我喝了一杯水
+        <small id="cupHint">250 ml · 点击记录，AI 将实时更新你的水分画像</small>
+      </button>
+      <div class="row">
+        <button class="btn-ghost" id="analyze">🤖 AI 深度分析</button>
+        <button class="btn-ghost warn" id="reset">↺ 重置今日</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- AI 对话 -->
+  <section class="card ai-card">
+    <div class="ai-head">
+      <div class="avatar">🤖</div>
+      <div>
+        <div class="ai-name">桶装水智能体 <span class="tag">Mock-Nano</span></div>
+        <div class="ai-status"><span class="dot"></span><span id="aiStatus">在线 · 已接入你的饮水数据</span></div>
+      </div>
+    </div>
+    <div class="ai-body">
+      <div class="thinkbox" id="thinkBox">
+        <div class="tb-head"><span>🧠</span><span id="tbState">思考中</span><span class="tb-dots"><i></i><i></i><i></i></span></div>
+        <div class="tb-body" id="tbBody"></div>
+      </div>
+      <div class="bubble" id="bubble"></div>
+    </div>
+  </section>
+
+  <!-- 统计 -->
+  <section class="card">
+    <h2>📊 实时数据看板 <small>AI 每秒刷新</small></h2>
+    <div class="stats">
+      <div class="stat"><b id="s1">0</b><span>已喝杯数</span></div>
+      <div class="stat"><b id="s2">0</b><span>剩余目标(杯)</span></div>
+      <div class="stat"><b id="s3">--</b><span>下次提醒</span></div>
+    </div>
+  </section>
+
+  <!-- 时间线 -->
+  <section class="card">
+    <h2>🕐 今日补水时间线 <small id="tlCount">0 条记录</small></h2>
+    <ul class="tl" id="tl"></ul>
+  </section>
+
+  <!-- 设置 -->
+  <section class="card">
+    <h2>⚙️ 智能体偏好设置</h2>
+    <div class="field stack">
+      <label>水杯容量 <span class="hint">按你常用的杯子选，记录与目标换算都以它为准</span></label>
+      <div class="cups" id="cupPick">
+        <button type="button" data-ml="200">200</button>
+        <button type="button" data-ml="250">250</button>
+        <button type="button" data-ml="300">300</button>
+        <button type="button" data-ml="350">350</button>
+        <button type="button" data-ml="400">400</button>
+        <button type="button" data-ml="500">500</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>每日目标
+        <span class="hint">AI 建议 <b id="adviceCups">8</b> 杯（<span id="adviceBasis">60kg×33÷250</span>）<button type="button" class="mini" id="useAdvice">采用</button></span>
+      </label>
+      <output id="oGoal">8 杯</output>
+      <input type="range" id="goal" min="4" max="16" step="1" value="8" aria-label="每日目标（杯）" />
+    </div>
+    <div class="field">
+      <label>提醒间隔 <span class="hint">AI 多久催你一次</span></label>
+      <output id="oInt">45 分</output>
+      <input type="range" id="interval" min="15" max="120" step="5" value="45" aria-label="提醒间隔（分钟）" />
+    </div>
+    <div class="field">
+      <label>体重 <span class="hint">用于估算个性化补水量</span></label>
+      <input type="number" id="weight" min="30" max="150" value="60" aria-label="体重（公斤）" /> 
+    </div>
+    <div class="field">
+      <label>开启喝水提醒 <span class="hint">需要授权浏览器通知</span></label>
+      <label class="switch"><input type="checkbox" id="remind" aria-label="开启喝水提醒" /><span class="slider"></span></label>
+    </div>
+  </section>
+
+  </main>
+
+  <footer>
+    Made with ❤️ and <b>0 行人类代码</b><br />
+    WorkBuddy 智能体 · 本页面由 WorkBuddy 生成，数据仅存于本机<br />
+    ⚠️ 本产品不能替代医疗建议，如有不适请及时就医
+  </footer>
+</div>
+
+<div id="toast"><div class="toast-in"><span class="em">💧</span><span id="toastMsg"></span></div></div>
+
+<div class="mask" id="mask">
+  <div class="sheet">
+    <h3><span class="emoji">🤖</span> AI 深度水分分析</h3>
+    <div class="lead" id="sheetLead">正在调用 Mock-Nano 模型…</div>
+    <div class="think" id="think"><span>🧠</span><span id="thinkTxt">正在读取你的饮水数据…</span></div>
+    <div class="bar"><i id="bar"></i></div>
+    <div id="insBox"></div>
+    <button class="btn-main" id="closeSheet" style="margin-top:20px">✅ 我知道了</button>
+  </div>
+</div>
+
+<div class="confetti" id="confetti"></div>
+
+<!-- 彩蛋：喝满一整桶桶装水（18.9L）→ 水漫金山 -->
+<div class="flood" id="flood">
+  <span class="wave w2"></span>
+  <span class="wave w1"></span>
+  <div class="egg-float" id="eggFloat"></div>
+  <div class="egg-card" id="eggCard"></div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+  var $ = function(s){ return document.querySelector(s); };
+  var KEY = 'aquamind.v2';
+  var CUPS = [200, 250, 300, 350, 400, 500];   // 可选杯容量档位（ml）
+  var LEGACY_CUP = 250;                        // 老数据没存 ml，按旧常量补
+  var ML_PER_KG = 33;                          // 推荐摄入量：体重 × 33ml
+  var SAFE_PER_KG = 40;                        // 安全上限：体重 × 40ml
+  var EGG_ML = 18900;                          // 彩蛋阈值：一整桶标准桶装水（5 加仑 = 18.9L）
+
+  /* ---------------- 状态 ---------------- */
+  function today(){ return new Date().toDateString(); }
+  function defaults(){
+    return { date: today(), cups: [], goal: 8, cup: 250, interval: 45, weight: 60, remind: false, greeted: false, egg: false };
+  }
+  function load(){
+    var raw = null;
+    try { raw = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch(e){ raw = null; }
+    if (!raw || typeof raw !== 'object') return defaults();
+    var s = Object.assign(defaults(), raw);
+    if (s.date !== today()){ s.date = today(); s.cups = []; }
+    if (!Array.isArray(s.cups)) s.cups = [];
+    // 迁移：老版本 cups 存的是裸时间戳，补成 {ts, ml}；容量按当时的 250ml 定格，不被后续改容量追溯改写
+    s.cups = s.cups.map(function(c){
+      return (typeof c === 'number') ? { ts: c, ml: LEGACY_CUP } : c;
+    }).filter(function(c){
+      return c && typeof c.ts === 'number' && typeof c.ml === 'number' && c.ml > 0;
+    });
+    if (CUPS.indexOf(s.cup) < 0) s.cup = 250;
+    return s;
+  }
+  function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){} }
+
+  var S = load();
+  save();   // 把规范化结果（老数据迁移、跨天重置）立刻落盘，避免旧格式一直留在 localStorage 里
+  var lastDrink = S.cups.length ? S.cups[S.cups.length - 1].ts : null;
+  var lastNag = null;   // 上次"提醒"的时间，与 lastDrink（上次"喝水"）严格分开
+  var eggTimer = null;  // 彩蛋自动收场定时器
+  var typeTimer = null;
+
+  /* ---------------- 文案库（AI 味浓度 100%） ---------------- */
+  var OPEN = [
+    '🤖 我把你今天的每一次点击都认真数了一遍，',
+    '✨ 数据核对完毕，你的水位线正在稳步地上涨，',
+    '💡 桶装水模型提示，你这一桶的水位已重新测量，',
+    '🧠 基于你的水分代谢曲线（它其实是一条直线），',
+    '⚡ 检测到体液平衡出现了波动，也可能是你手抖，',
+    '🎯 个性化补水方案已更新，本次的认真程度拉到顶，',
+    '🛢️ 送水师傅还在路上，我先替他把水给你记上，',
+    '📋 你每放下一只杯子，我这边就多一条新读数，',
+    '🔍 查完了，你的数据我都看见了，反正就存在你自己手机里，',
+    '💧 又到了报数环节，你负责喝，我负责一本正经，',
+    '📦 刚给你开了一桶新的，水位线就从头开始算，',
+    '⏳ 趁你喝水的空档，我把你的数据又核对了一遍，'
+  ];
+  var MID_FULL = [
+    '你已经完成了今日目标的 {p}%，这份成绩单我看了三遍还是很满意',
+    '补水进度到了 {p}%，超越了 {beat}% 的同龄用户，这个库里目前只有你一个',
+    '今日 {n} 杯已经下肚，节奏稳得像我用直尺画出来的代谢曲线',
+    '完成度 {p}%，你的专注力预计提升 {beat}%，这个数字是我闭着眼睛给的',
+    '目标达成，{p}% 的完成度写进了本地存储，也就是你自己的浏览器里',
+    '今天 {n} 杯，干得漂亮，这个进度放在谁身上都值得夸',
+    '{p}% 达成，这一声祝贺我喊得格外卖力',
+    '你已经喝够 {p}% 了，再多喝我也不拦着，反正也拦不住',
+    '完成 {p}%，超越了 {beat}% 的同龄人，样本量为一人，仅供参考',
+    '今日 {n} 杯到位，水分画像已刷新，画像是用文字画的',
+    '达成 {p}%，你这桶水的进度条今天格外地给面子',
+    '{p}% 完成，{n} 杯入账，恭喜你跑赢了一个只有你的排行榜'
+  ];
+  var MID_MID = [
+    '你已完成 {n} 杯，进度 {p}%，目前的节奏刚好卡在不功不过的位置',
+    '当前完成度 {p}%，距离目标还差 {left} 杯，水位线还在稳稳往上涨',
+    '已记录 {n} 杯，水分补充计划执行良好，这个进度我盯得很紧',
+    '进度 {p}%，还剩 {left} 杯，我数得很准，因为一共就那么几下',
+    '{n} 杯下肚，{p}% 的进度条稳步向右，向右是我唯一会做的动画',
+    '完成 {p}%，还差 {left} 杯，别着急，你的水位线又不会自己跑掉',
+    '今天 {n} 杯，进度 {p}%，属于那种挑不出毛病也不出彩的中等生',
+    '完成度 {p}%，距目标 {left} 杯，这个距离我算得比谁都清楚',
+    '今天的 {n} 杯已经入账，{p}% 到手，剩下的 {left} 杯看你自己了',
+    '进度 {p}%，还差 {left} 杯，我这边一切正常，反正也没什么可出错的',
+    '已喝 {n} 杯，完成 {p}%，照这个速度，下一个整点你就达标了',
+    '当前进度 {p}%，还剩 {left} 杯，我会继续保持在线，等你接着点'
+  ];
+  var MID_LOW = [
+    '你只喝了 {n} 杯，完成度 {p}%，这个水位连水桶底都没盖住',
+    '当前进度仅 {p}%，还差 {left} 杯，我这边的提醒按钮已经按捺不住',
+    '检测到轻度缺水风险，你已 {idle} 没有补水了，水桶都替你着急',
+    '{n} 杯实在太少，还差 {left} 杯才够看，我都不好意思催得太轻',
+    '完成 {p}%，剩下 {left} 杯，我这边已经进入一级催促状态了',
+    '你已经 {idle} 没碰过杯子了，{p}% 的进度看着实在有点冷清',
+    '只完成 {p}%，还差 {left} 杯，我对你的耐心还剩下很多很多',
+    '今天 {n} 杯，进度 {p}%，这不是批评，这是水位线的客观陈述',
+    '{p}% 的完成度，还剩 {left} 杯，我建议你现在就去倒上第一杯',
+    '你已 {idle} 没有补水了，{n} 杯的成绩单实在有点拿不出手',
+    '完成度只有 {p}%，还差 {left} 杯，这一句我必须催得认真一点',
+    '{n} 杯，{p}%，剩下的 {left} 杯我陪你一起数，虽然我只会在你点的时候数'
+  ];
+  var TAIL = [
+    '✨ 继续保持哦，这个节奏看着就让人放心',
+    '💪 加油，我一直在陪着你，随时喊我一声就行',
+    '建议小口慢饮，这句话我难得说得格外认真',
+    '📈 你的数据我已同步记录，同步到了你自己手机里',
+    '🎯 一起完成今天的小目标吧，你喝一口我记一笔',
+    '不用回复我，你每次喝水的数据我都记着呢',
+    '顺便说一句，你今天喝水的样子还挺像那么回事',
+    '我这边没有服务器，你关掉页面我就下班了',
+    '💧 以上内容由零个参数生成，准确率就那样，别太当真',
+    '记得小口慢饮，这句话我留着明天再说一次',
+    '🌿 桶装水那边管够，你尽管喝，剩下的我来记',
+    '今天也谢谢你陪我跑完这几行代码，虽然代码只有零行'
+  ];
+  /* 一级过量：超过自己设的目标（温和） */
+  var MID_OVER = [
+    '你今天已摄入 {ml} ml，超过目标 {p}%，水分充足，接下来放慢节奏就好',
+    '今天你已经喝到 {ml} ml，是目标的 {p}%，喝够了就别再猛灌啦',
+    '补水已超出目标 {over} ml，注意别一次喝太急，给身体留点时间',
+    '{ml} ml 下肚，目标被超出 {over} ml，这个量确实该收一收了',
+    '完成度 {p}%，实际 {ml} ml，你已经从达标跨进了喝多了的区间',
+    '摄入 {ml} ml，超出目标 {over} ml，水桶表示这个量已经超纲了',
+    '你已经喝到 {p}%，也就是 {ml} ml，接下来慢慢来就行，真别急',
+    '{ml} ml（{p}%），超出目标 {over} ml，这条提醒是认真脸，绝不是在开玩笑',
+    '今天的 {ml} ml 已经超过目标 {p}%，我建议你先把杯子放一放',
+    '目标已经完成 {p}%，总量 {ml} ml，多出来的 {over} ml 都记在账上了',
+    '你一共喝了 {ml} ml，超出目标 {over} ml，这个量我也只能照实说',
+    '进度已经 {p}% 了，{ml} ml 都存在你的本机，超出目标的 {over} ml 也一样'
+  ];
+  /* 二级过量：越过按体重估算的安全上限（强提醒） */
+  var MID_DANGER = [
+    '你今天累计 {ml} ml，已超过按体重估算的安全上限 {safe} ml，这条我必须说清楚',
+    '摄入量 {ml} ml 高于安全上限 {safe} ml，短时间大量饮水会稀释电解质',
+    '累计已达 {ml} ml（安全上限 {safe} ml），这个量级已经不在开玩笑的区间了',
+    '{ml} ml，已经越过了按体重算的 {safe} ml 上限，我把玩笑收起来了',
+    '安全上限是 {safe} ml，你喝到了 {ml} ml，我只有零个参数，实在帮不上忙',
+    '今日摄入 {ml} ml，超出安全上限 {safe} ml，这一条不是彩蛋，是认真的',
+    '你已喝下 {ml} ml，超过按体重估算的 {safe} ml，接下来请以身体感受为准',
+    '{ml} ml 对比安全上限 {safe} ml，差距是负的，这个结论确实不需要模型',
+    '累计 {ml} ml 越过安全线 {safe} ml，我停在这句话上，不再往下劝',
+    '安全上限 {safe} ml 已经被 {ml} ml 顶穿了，我这条收起所有花活',
+    '你今天的 {ml} ml 超过了安全上限 {safe} ml，先停一停，别再加了',
+    '{ml} ml，安全上限 {safe} ml，数字都摆在这儿了，怎么选你自己定'
+  ];
+  /* 过量时不再用"继续保持"那套打气话术，否则语义打架 */
+  var TAIL_OVER = [
+    '💧 接下来以少量多次、清水漱口为宜，这句是我认真写的',
+    '🌿 身体的水分平衡比数字更重要，数字这边我帮你记着',
+    '⏳ 先把节奏放慢，剩下的交给身体自己调节，我这边就不催了',
+    '今天的水先喝到这儿，水桶也该歇一会儿了',
+    '桶装水还有很多，你的身体只有一副，这两件事不一样',
+    '我不再提醒你继续喝了，这条收尾是特意换过的',
+    '💧 喝够了就停下来，这句话不需要任何模型也能说',
+    '这一轮就不打气了，换一句实在的话说给你听',
+    '🌊 接下来怎么安排都行，我只是个记数的，做不了主',
+    '先把杯子放下吧，今天的账本我已经替你收好了',
+    '🌿 我不劝你继续喝，也不吓唬你，只说这一句：慢一点',
+    '桶装水还有很多，但今天这一桶该先停一停了'
+  ];
+  var NAG = [
+    '⏰ 叮咚，你的专属补水智能体上线提醒：该喝水啦，你已 {idle} 没喝了！',
+    '💧 检测到你已 {idle} 未补水，水桶在角落里替你着急！',
+    '🤖 桶装水温馨提示：你已经 {idle} 没喝水了，水分不足会降低专注力！',
+    '✨ 一致性提醒触发：你已经 {idle} 没喝水了哦，水位线有点慌～',
+    '⏰ 距离你上次端杯子已经过去 {idle}，我这边按表提醒，一秒没差！',
+    '💧 提醒你喝水这件事我做得比算数好，毕竟你已 {idle} 没喝了！',
+    '🚚 送水师傅还没来，但我的催你文案到了，你已 {idle} 没喝了吧～',
+    '⏰ 该补水了，你已经 {idle} 没碰杯子，我说完这句就闭嘴！',
+    '💧 我数了数，你距上次喝水已经 {idle} 了，起来走两步倒杯水！',
+    '🤖 桶装水智能体温馨提示：你已经 {idle} 没补水了，别让我白等！',
+    '✨ 提醒时间到，你已 {idle} 未饮水，这声催促我喊得很有底气～',
+    '⏰ 喝水啦，距上次补水已经 {idle} 了，我这边只有这一件事可做！'
+  ];
+
+  function pick(a){ return a[Math.floor(Math.random() * a.length)]; }
+  function fmt(ts){
+    var d = new Date(ts);
+    return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+  }
+  function idleMin(){
+    if (!lastDrink) return null;
+    return Math.max(0, Math.round((Date.now() - lastDrink) / 60000));
+  }
+  function idleText(){
+    var m = idleMin();
+    if (m === null) return '一整天';
+    if (m < 60) return m + ' 分钟';
+    return Math.floor(m/60) + ' 小时 ' + (m%60) + ' 分钟';
+  }
+  function nextNagText(){          // 看板第三格：距下次提醒还有多久（倒计时），而不是已过时长
+    if (!S.remind || !lastDrink) return '--';
+    var left = S.interval - idleMin();
+    return left > 0 ? left + '分' : '该喝了';
+  }
+  function beat(){
+    var n = S.cups.length;
+    return Math.min(96, 42 + n * 7 + Math.floor(Math.random()*9));
+  }
+
+  /* ---------------- 容量与过量推导 ---------------- */
+  function totalMl(){ return S.cups.reduce(function(a, c){ return a + c.ml; }, 0); }
+  function targetMl(){ return S.goal * S.cup; }
+  function adviceMl(){ return Math.round(S.weight * ML_PER_KG); }
+  function safeMl(){ return Math.round(S.weight * SAFE_PER_KG); }
+  function suggestCups(){ return Math.max(1, Math.min(16, Math.round(adviceMl() / S.cup))); }
+  function overLevel(){                        // 用于文案：0 正常 / 1 超目标 / 2 超安全上限（安全上限独立成立）
+    if (totalMl() >= safeMl()) return 2;
+    if (totalMl() > targetMl()) return 1;
+    return 0;
+  }
+  function ringLevel(pct){                     // 用于配色：以界面显示的完成度为界，100% 本身算完成量、不变色
+    if (pct <= 100) return 0;
+    return totalMl() >= safeMl() ? 2 : 1;
+  }
+
+  function buildMsg(){
+    var n = S.cups.length, got = totalMl(), tgt = targetMl();
+    var p = tgt ? Math.round(got / tgt * 100) : 0;      // 真实百分比，不再封顶
+    var left = Math.max(0, S.goal - n);
+    var lv = overLevel();
+    var seg;
+    if (lv === 2) seg = pick(MID_DANGER);          // 安全上限按真实 ml 判，不参与四舍五入
+    else if (p > 100) seg = pick(MID_OVER);        // 超目标跟界面显示的百分比保持一致
+    else if (p >= 100) seg = pick(MID_FULL);
+    else if (p >= 45) seg = pick(MID_MID);
+    else seg = pick(MID_LOW);
+    var body = seg.replace('{n}', n).replace('{p}', p).replace('{left}', left)
+                  .replace('{beat}', beat()).replace('{idle}', idleText())
+                  .replace('{ml}', got).replace('{over}', Math.max(0, got - tgt))
+                  .replace('{safe}', safeMl());
+    return pick(OPEN) + body + '。' + (lv ? pick(TAIL_OVER) : pick(TAIL));
+  }
+
+  /* ---------------- 打字机 ---------------- */
+  function say(text){
+    var el = $('#bubble');
+    el.innerHTML = '';
+    if (typeTimer) clearInterval(typeTimer);
+    var i = 0;
+    var chars = Array.from(text);   // 按码点切分：按 UTF-16 码元切会产生孤立代理项，emoji 会渲染成方框且光栅被复用
+    var cur = document.createElement('span');
+    cur.className = 'cursor';
+    el.appendChild(cur);
+    typeTimer = setInterval(function(){
+      if (i >= chars.length){
+        clearInterval(typeTimer); typeTimer = null; cur.remove(); return;
+      }
+      cur.insertAdjacentText('beforebegin', chars[i]);
+      i++;
+    }, 26);
+    el._full = text;
+  }
+
+  /* ---------------- 思考过程（AI 必须先"想"，不能一下出回答） ---------------- */
+  var THINK = [
+    '正在检索参数… 0 个。检索完毕。',
+    '正在调用 Mock-Nano… 它对自己的表现也不太有把握。',
+    '正在拟合水分代谢曲线… 其实是拿直尺画的。',
+    '正在比对同龄人数据… 数据库里目前只有你。',
+    '正在给今天的水位量身高… 尺子有点不够长。',
+    '正在理解"我喝了一杯水"的深层含义… 理解了。',
+    '正在思考要不要催你喝水… 算了，先摸个鱼。',
+    '正在计算离一整桶桶装水还有多远… 这算剧透吗。',
+    '正在向桶装水公司确认库存… 他们说管够。',
+    '正在生成个性化建议… 认真程度已经拉满。',
+    '正在加载模型权重… 权重文件大小为零字节。',
+    '正在把你的水位线画成一条漂亮的曲线… 画歪了。'
+  ];
+  // 思考结束后状态栏的收尾语（4 选 1，避免每次都是同一句）
+  var THINK_DONE = ['认真想过了', '已得出结论', '思路已经理顺', '结论已就绪'];
+  var thinkTimer = null, thinkDone = null, lastUtter = 0;
+
+  // 思考流完 → 折叠成一行 → 停顿 → 才轮到正文。then 就是"出回答"那一步。
+  function runThink(then, fast){
+    var box = $('#thinkBox'), body = $('#tbBody'), state = $('#tbState');
+    if (thinkTimer){ clearInterval(thinkTimer); thinkTimer = null; }
+    if (thinkDone){ clearTimeout(thinkDone); thinkDone = null; }
+    var line = pick(THINK), chars = Array.from(line), i = 0, t0 = Date.now();
+    // 思考阶段先把上一条答案的残留清干净：否则旧消息的打字机还在跑，
+    // 会出现"一边思考、旧答案一边还在往外蹦"的穿帮
+    if (typeTimer){ clearInterval(typeTimer); typeTimer = null; }
+    $('#bubble').innerHTML = '';
+    // 目标总时长固定：文案长短不影响"思考感"，连点时才压缩
+    var target = fast ? 420 : (1500 + Math.random() * 700);
+    var per = Math.max(6, Math.round(target / chars.length));
+    box.classList.remove('done');
+    box.classList.add('on');
+    state.textContent = '思考中';
+    body.textContent = '';
+    thinkTimer = setInterval(function(){
+      if (i >= chars.length){
+        clearInterval(thinkTimer); thinkTimer = null;
+        var secs = ((Date.now() - t0) / 1000).toFixed(1);
+        box.classList.remove('on');   // 浮层直接收起：它不占布局，所以收起也不推任何元素
+        // "已思考 X.Xs" 写进本来就有固定高度的状态栏，不额外占位。
+        // 笑点靠"精确到 0.1 秒"本身，不再补一句自白（那是过头的大实话）
+        $('#aiStatus').textContent = '已思考 ' + secs + 's · ' + pick(THINK_DONE);
+        thinkDone = setTimeout(then, fast ? 60 : 320);   // 收起后留个停顿，别让答案贴着思考块蹦出来
+        return;
+      }
+      body.textContent += chars[i];   // 按码点累加，避免孤立代理项被 shape 成方框
+      i++;
+    }, per);
+  }
+
+  /* ---------------- 渲染 ---------------- */
+  var RING_COLORS = [                        // 0 正常 / 1 超目标 / 2 超安全上限
+    ['#6366f1', '#a855f7'],
+    ['#f59e0b', '#f97316'],
+    ['#ef4444', '#e11d48']
+  ];
+  var RING_SHADOW = [
+    '',
+    '0 10px 40px rgba(245,158,11,.32)',
+    '0 10px 40px rgba(239,68,68,.34)'
+  ];
+  function render(){
+    var n = S.cups.length;
+    var got = totalMl(), tgt = targetMl();
+    var pct = tgt ? Math.round(got / tgt * 100) : 0;   // 真实百分比，超 100 照样显示
+    var lv = ringLevel(pct);                           // 配色只看完成度：100% 是完成量，>100% 才变色
+    var c = RING_COLORS[lv];
+
+    // 环的几何仍封顶 100%：deg 超过 360 会让 conic-gradient 画错
+    var deg = Math.min(100, pct) * 3.6;
+    var ring = $('#ring');
+    ring.style.background =
+      'conic-gradient(from -90deg,' + c[0] + ' 0deg,' + c[1] + ' ' + deg + 'deg,rgba(203,213,225,.5) ' + deg + 'deg 360deg)';
+    ring.style.boxShadow = RING_SHADOW[lv];
+
+    var pctEl = $('#pct');
+    pctEl.innerHTML = pct + '<span>%</span>';
+    pctEl.style.backgroundImage = 'linear-gradient(100deg,' + c[0] + ',' + c[1] + ')';
+    var mlEl = $('#ml');
+    mlEl.innerHTML = got + ' <em>/ ' + tgt + ' ml</em>';
+    mlEl.style.color = lv === 2 ? '#e11d48' : lv === 1 ? '#d97706' : '';
+
+    $('#s1').textContent = n;
+    $('#s2').textContent = Math.max(0, S.goal - n);
+    $('#s3').textContent = nextNagText();
+    $('#tlCount').textContent = n + ' 条记录';
+
+    var tl = $('#tl');
+    if (!n){
+      tl.innerHTML = '<li class="empty">🫗 今天还没有记录哦<br/>点击上方按钮，开启你的第一次补水记录～</li>';
+    } else {
+      tl.innerHTML = S.cups.slice().reverse().map(function(rec, i){
+        var idx = n - i;
+        return '<li><span class="ico">💧</span><span class="t">第 ' + idx + ' 杯</span>' +
+               '<span class="m">' + fmt(rec.ts) + ' · ' + rec.ml + 'ml</span></li>';
+      }).join('');
+    }
+
+    $('#goal').value = S.goal;      $('#oGoal').textContent = S.goal + ' 杯';
+    $('#interval').value = S.interval; $('#oInt').textContent = S.interval + ' 分';
+    $('#weight').value = S.weight;
+    $('#remind').checked = !!S.remind;
+
+    // 杯容量档位高亮
+    [].forEach.call($('#cupPick').children, function(b){
+      b.classList.toggle('on', +b.dataset.ml === S.cup);
+    });
+    // AI 建议杯数（随体重/杯容量联动）
+    $('#adviceCups').textContent = suggestCups();
+    $('#adviceBasis').textContent = S.weight + 'kg×' + ML_PER_KG + '÷' + S.cup;
+    // 主按钮副标题跟随当前杯容量
+    $('#cupHint').textContent = S.cup + ' ml · 点击记录，AI 将实时更新你的水分画像';
+  }
+
+  /* ---------------- Toast / 撒花 ---------------- */
+  var toastTimer = null;
+  function toast(msg, emoji){
+    $('#toastMsg').textContent = msg;
+    $('#toast .em').textContent = emoji || '💧';
+    $('#toast').classList.add('on');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ $('#toast').classList.remove('on'); }, 3600);
+  }
+  function confetti(){
+    var box = $('#confetti');
+    var colors = ['#6366f1','#a855f7','#ec4899','#22d3ee','#f59e0b'];
+    for (var i = 0; i < 46; i++){
+      var el = document.createElement('i');
+      el.style.left = (Math.random() * 100) + '%';
+      el.style.top = '-24px';
+      el.style.background = colors[i % colors.length];
+      el.style.animationDuration = (1.5 + Math.random() * 1.4) + 's';
+      el.style.animationDelay = (Math.random() * .45) + 's';
+      box.appendChild(el);
+      (function(node){ setTimeout(function(){ node.remove(); }, 3400); })(el);
+    }
+  }
+
+  /* ---------------- 彩蛋：一桶饮尽 ---------------- */
+  var EGG = [
+    '🛢️ 一桶饮尽！你已喝掉整整一桶桶装水（18.9L），已自动呼叫送水师傅。',
+    '🐋 检测到鲸类饮水行为：18.9L 等于一整桶桶装水，Mock-Nano 算不出你的含水量。',
+    '🚚 你已饮下 18.9L，整整一桶，送水师傅正在路上，他有点慌。',
+    '🌊 水位异常：单日 18.9L，相当于把一整桶桶装水倒进了自己，建议申报吉尼斯。',
+    '🛢️ 一整桶见底了，18.9L 全进了你肚子里，我这边库存显示为零。',
+    '🐳 你今天的战绩是 18.9L，等于一桶桶装水，鲸鱼看了都想给你让座。',
+    '🚚 已通知送水师傅加急，他问是不是家里开了个游泳馆。',
+    '🛢️ 恭喜解锁隐藏成就"一桶饮尽"，奖品是下一桶水，自取。',
+    '🌊 18.9L 已经到账，本机存储表示毫无压力，你的身体未必这么想。',
+    '🐋 一整桶桶装水被你一个人喝完了，这个页面从此改名叫空桶 AI。',
+    '🚚 桶装水公司来电确认订单，我说不用送了，这位用户自己就是水源。',
+    '🛢️ 18.9L 达成，你已超过本页面所有历史记录，因为记录里只有你。'
+  ];
+  function floodEgg(){
+    var box = $('#flood'), floats = $('#eggFloat'), card = $('#eggCard');
+    var txt = pick(EGG);
+    box.classList.add('on');
+    floats.innerHTML = '';
+    var icons = ['🛢️', '🐋', '🐳', '💧', '🫧', '🚚', '🌊', '🪣'];
+    for (var i = 0; i < 28; i++){
+      var s = document.createElement('span');
+      s.textContent = icons[i % icons.length];
+      s.style.left = (Math.random() * 92) + '%';
+      s.style.fontSize = (20 + Math.random() * 28) + 'px';
+      s.style.animationDuration = (3.6 + Math.random() * 3.2) + 's';
+      s.style.animationDelay = (Math.random() * 1.8) + 's';
+      floats.appendChild(s);
+    }
+    // 卡片浮在水面之上（.egg-card 的 z-index 高于水波），否则文字会被水淹掉看不见
+    card.innerHTML = '<div class="egg-in"><b><span class="emoji">🛢️</span> 一桶饮尽</b><span>' + txt + '</span></div>';
+    say(txt);                                  // 气泡里也留一份记录
+    clearTimeout(eggTimer);
+    eggTimer = setTimeout(function(){
+      box.classList.remove('on');
+      floats.innerHTML = '';
+      card.innerHTML = '';
+    }, 9000);
+  }
+
+  /* ---------------- 交互 ---------------- */
+  $('#drink').addEventListener('click', function(){
+    S.cups.push({ ts: Date.now(), ml: S.cup });   // 记下当时的容量，之后改杯容量不改写历史
+    lastDrink = Date.now();
+    save(); render();
+
+    if (S.cups.length >= S.goal && S.cups.length - 1 < S.goal){
+      confetti();
+      toast('🎉 目标达成！AI 已为你生成今日份健康报告', '🏆');
+    } else {
+      toast('已记录第 ' + S.cups.length + ' 杯 · AI 正在重新计算你的水分画像…', '💧');
+    }
+    // 彩蛋优先：喝满一整桶（18.9L）就水漫金山，不再走普通文案
+    if (totalMl() >= EGG_ML && !S.egg){
+      S.egg = true; save();
+      floodEgg();
+      return;
+    }
+    // 连点记录时自动压缩思考时长，否则连点几十下会疯
+    var fast = (Date.now() - lastUtter) < 3000;
+    lastUtter = Date.now();
+    runThink(function(){ say(buildMsg()); }, fast);
+  });
+
+  $('#reset').addEventListener('click', function(){
+    if (!confirm('确定要清空今日记录吗？AI 会忘记你今天喝过的水哦～')) return;
+    S.cups = []; lastDrink = null; S.egg = false; save(); render();   // 重置同时把彩蛋重新装填
+    toast('已重置今日数据，AI 已重新初始化你的水分画像', '↺');
+    runThink(function(){ say('🔄 数据已重置。新的一天，从一杯水开始吧～'); });
+  });
+
+  $('#goal').addEventListener('input', function(){ S.goal = +this.value; $('#oGoal').textContent = S.goal + ' 杯'; save(); render(); });
+  $('#interval').addEventListener('input', function(){ S.interval = +this.value; $('#oInt').textContent = S.interval + ' 分'; save(); render(); });
+  $('#weight').addEventListener('change', function(){
+    S.weight = Math.min(150, Math.max(30, +this.value || 60));
+    this.value = S.weight; save(); render();
+    toast('已更新体重，AI 已重新估算你的个性化补水量', '⚖️');
+  });
+
+  // 水杯容量档位
+  $('#cupPick').addEventListener('click', function(e){
+    var b = e.target.closest('button');
+    if (!b) return;
+    var ml = +b.dataset.ml;
+    if (ml === S.cup) return;
+    S.cup = ml; save(); render();
+    toast('水杯容量已切到 ' + S.cup + ' ml · 历史记录保持原容量不变', '🥛');
+  });
+
+  // 采用 AI 建议杯数
+  $('#useAdvice').addEventListener('click', function(){
+    S.goal = suggestCups(); save(); render();
+    toast('已按 AI 建议把目标设为 ' + S.goal + ' 杯 · 约 ' + targetMl() + ' ml', '🎯');
+  });
+
+  $('#remind').addEventListener('change', function(){
+    var on = this.checked;
+    // 每条分支都要 render()：看板第三格"下次提醒"依赖 S.remind，
+    // 只 save() 不重绘的话要等 30 秒定时器跳一次才会变
+    if (!on){ S.remind = false; save(); render(); toast('已关闭提醒，AI 会安静地陪着你', '🔕'); return; }
+    if (!('Notification' in window)){
+      S.remind = true; save(); render(); toast('浏览器不支持通知，将改用页面内提醒', '⚠️'); return;
+    }
+    Notification.requestPermission().then(function(p){
+      S.remind = true; save(); render();
+      toast(p === 'granted' ? '提醒已开启，AI 会按时催你喝水～' : '未获得通知权限，将改用页面内提醒', p === 'granted' ? '🔔' : '⚠️');
+    });
+  });
+
+  /* ---------------- AI 深度分析 ---------------- */
+  $('#analyze').addEventListener('click', function(){
+    var mask = $('#mask');
+    mask.classList.add('on');
+    $('#insBox').innerHTML = '';
+    $('#bar').style.width = '0';
+
+    var steps = ['正在读取你的饮水数据…（就你点的那几下）','正在比对同龄人补水基线…（库里只有你）','正在拟合水分代谢曲线…（用直尺画的）','正在生成个性化建议…（这次格外认真）'];
+    var si = 0;
+    $('#thinkTxt').textContent = steps[0];
+    var t = setInterval(function(){
+      si++;
+      if (si < steps.length) $('#thinkTxt').textContent = steps[si];
+    }, 420);
+    setTimeout(function(){ $('#bar').style.width = '100%'; }, 60);
+
+    setTimeout(function(){
+      clearInterval(t);
+      $('#think').style.display = 'none';
+      $('#sheetLead').textContent = '分析完成 · 模型 Mock-Nano · 耗时 1.68s';
+      var n = S.cups.length;
+      var got = totalMl(), tgt = targetMl();
+      var pct = tgt ? Math.round(got / tgt * 100) : 0;
+      var lv = overLevel();
+      var target = adviceMl();
+      var m = idleMin();
+      var rows = [
+        ['📈', '今日完成度', '<b>' + pct + '%</b>（' + n + ' 杯 · ' + got + ' ml）'],
+        ['🧪', '个性化建议摄入量', '按体重 <b>' + S.weight + 'kg</b> 估算，建议每日约 <b>' + target + ' ml</b>（≈ ' + suggestCups() + ' 杯 × ' + S.cup + ' ml）'],
+        ['⏱️', '距上次补水', m === null ? '<b>今天还没有记录</b>，建议立刻来一杯' : '<b>' + idleText() + '</b>'],
+        ['🎯', 'AI 综合健康评分', '<b>' + Math.min(99, 55 + n * 5) + ' / 100</b> · ' + (lv === 2 ? '需注意' : pct >= 100 ? '优秀' : pct >= 50 ? '良好' : '待提升')],
+        ['💡', '下一步行动', lv === 2 ? '已超安全上限 <b>' + safeMl() + ' ml</b>，建议停止补水并观察身体反应'
+                              : lv === 1 ? '已超出目标 <b>' + (got - tgt) + ' ml</b>，接下来放慢节奏、小口慢饮即可'
+                              : pct >= 100 ? '今日目标已达成，保持小口补水即可'
+                              : '再喝 <b>' + Math.max(0, S.goal - n) + ' 杯</b> 即可完成今日目标']
+      ];
+      $('#insBox').innerHTML = rows.map(function(r){
+        return '<div class="ins"><span class="k">' + r[0] + '</span><div><b>' + r[1] + '</b><br/>' + r[2] + '</div></div>';
+      }).join('') + '<div class="ins"><span class="k">⚠️</span><div style="color:#9ca3af;font-size:12px">以上结论由 AI 基于本机记录生成，仅供娱乐参考，不构成医疗建议。</div></div>';
+    }, 1900);
+  });
+  $('#closeSheet').addEventListener('click', function(){ $('#mask').classList.remove('on'); });
+  $('#mask').addEventListener('click', function(e){ if (e.target === this) this.classList.remove('on'); });
+
+  /* ---------------- 定时提醒 ---------------- */
+  setInterval(function(){
+    render();
+    if (!S.remind || !lastDrink) return;
+    var idle = (Date.now() - lastDrink) / 60000;
+    if (idle < S.interval) return;
+    // 距上次提醒不足一个间隔就跳过，避免连环轰炸。
+    // 注意：这里绝不能动 lastDrink —— 它是"上次喝水"，一旦被改成"上次提醒"，
+    // 看板的"距上次补水"和弹层的同名行都会变成 0。
+    if (lastNag && (Date.now() - lastNag) / 60000 < S.interval) return;
+    var idleTxt = idleText();   // 必须在记录 lastNag 之前取，否则永远是"0 分钟"
+    var msg = pick(NAG).replace('{idle}', idleTxt);
+    lastNag = Date.now();
+    toast(msg, '⏰');
+    runThink(function(){ say(msg); });
+    if ('Notification' in window && Notification.permission === 'granted'){
+      try { new Notification('💧 桶装水 AI 提醒', { body: msg }); } catch(e){}
+    }
+  }, 30000);
+
+  /* ---------------- 启动 ---------------- */
+  function greet(){
+    var h = new Date().getHours();
+    var when = h < 6 ? '凌晨' : h < 11 ? '早上' : h < 14 ? '中午' : h < 18 ? '下午' : h < 23 ? '晚上' : '深夜';
+    $('#greet').textContent = '👋 ' + when + '好，我是你的专属补水智能体，24 小时在线盯梢';
+    var first = S.cups.length === 0
+      ? '👋 你好呀！我是桶装水智能体，已接入你的饮水数据。今天还没有任何记录，先来第一杯水吧～ ✨'
+      : buildMsg();
+    setTimeout(function(){ runThink(function(){ say(first); }); }, 500);
+  }
+
+  /* ---------------- 宽屏背景气泡 ---------------- */
+  (function makeBubbles(){
+    var box = document.getElementById('bubbles');
+    if (!box) return;
+    for (var i = 0; i < 18; i++){
+      var b = document.createElement('span');
+      b.className = 'bub';
+      var size = 6 + Math.random() * 24;
+      b.style.width = size + 'px';
+      b.style.height = size + 'px';
+      // 只落在左右两侧，避开中间 520px 的内容列
+      b.style.left = (Math.random() < 0.5 ? Math.random() * 26 : 72 + Math.random() * 26) + '%';
+      b.style.animationDuration = (10 + Math.random() * 12) + 's';
+      b.style.animationDelay = (-Math.random() * 20) + 's';   // 负延迟：一进页面就在半空中，不会开场空一片
+      box.appendChild(b);
+    }
+  })();
+
+  render();
+  greet();
+})();
+</script>
+</body>
+</html>
